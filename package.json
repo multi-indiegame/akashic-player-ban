@@ -1,0 +1,24 @@
+{
+  "name": "akashic-player-ban-workspace",
+  "private": true,
+  "description": "ゲーム進行からのプレイヤー追放を扱う Akashic Engine 拡張",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/multi-indiegame/akashic-player-ban.git"
+  },
+  "license": "MIT",
+  "workspaces": [
+    "packages/akashic-player-ban",
+    "packages/akashic-player-ban-plugin"
+  ],
+  "scripts": {
+    "build": "npm run build -w @multi-indiegame/akashic-player-ban && npm run build -w @multi-indiegame/akashic-player-ban-plugin",
+    "clean": "rimraf packages/*/lib",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2"
+  }
+}
