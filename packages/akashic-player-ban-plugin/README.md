@@ -29,7 +29,8 @@ view.registerExternalPlugin(new PlayerBanPlugin(backend));
 仕様の全文は [akashic-external-protocol](https://github.com/multi-indiegame/akashic-external-protocol) の PROTOCOL.md にある。最低限これを満たすこと。
 
 1. **通知の注入**
-   BAN / 解除が確定したら `buildBanNotificationEvent(action, playerId)` で組み立てたイベントを playlog に注入し、active インスタンス経由で全インスタンスへ配る。**部屋主のブラウザに依存しない経路で配ること。** 他の部屋や設定画面で確定した BAN も届かないと、表示と実態がずれる
+   BAN / 解除が確定したら `buildBanNotificationEvent(action, playerId)` で組み立てたイベントを playlog に注入し、active インスタンス経由で全インスタンスへ配る。**部屋主のブラウザに依存しない経路で配ること。** 他の部屋や設定画面で確定した BAN も届かないと、表示と実態がずれる。
+   `playerId` は**コンテンツへ申告している in-game playerId**（コンテンツが `ev.player.id` で観測している値）であること。実行基盤の内部識別子を送るとコンテンツ側で誰にもマッチせず、追放が静かに効かなくなる（PROTOCOL.md 4.1）
 
 2. **予約 playerId の拒否**
    クライアント由来のイベント送信のうち、`:` で始まる playerId を名乗るものを破棄する。ただし **tick 書き込み権限を持つ接続は除く**。Akashic Engine 自身が `:akashic` を送るため、無条件に弾くと起動しなくなる

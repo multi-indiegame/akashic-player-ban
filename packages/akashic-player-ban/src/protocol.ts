@@ -138,7 +138,13 @@ export function buildNotificationEvent(
     return [EVENT_CODE_MESSAGE, 0, RESERVED_PLAYER_ID, data];
 }
 
-/** 実行基盤が BAN / 解除の確定時に注入するイベントを組み立てる */
+/**
+ * 実行基盤が BAN / 解除の確定時に注入するイベントを組み立てる。
+ *
+ * `playerId` は実行基盤がコンテンツへ申告している in-game playerId
+ * （コンテンツが `ev.player.id` で観測している値）を渡すこと。実行基盤の内部
+ * 識別子を渡すとコンテンツ側で誰にもマッチせず、追放が静かに効かなくなる。
+ */
 export function buildBanNotificationEvent(
     action: PlayerBanAction,
     playerId: string,
