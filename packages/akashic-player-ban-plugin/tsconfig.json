@@ -1,8 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2018",
-    "lib": ["ES2018"],
+    "target": "ES6",
+    "lib": ["ES6"],
     "outDir": "lib",
     "rootDir": "src"
   },

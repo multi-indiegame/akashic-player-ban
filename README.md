@@ -6,6 +6,8 @@
 
 この拡張の主役は `onPlayerBanned` の方で、`banPlayer()` は実行基盤の追放機能を呼ぶ入口にすぎない。
 
+**API は追放の要求だけ。** 解除は実行基盤の管理画面の仕事、権限判定は実行基盤の決めごと、部屋主が誰かはコンテンツの責務。拡張が持つのは「要求する口」と「確定を全インスタンスへ届ける経路」の 2 つに絞ってある。
+
 ## パッケージ
 
 | パッケージ                                                                           | 使う人           | 内容                                           |
@@ -16,6 +18,10 @@
 2 つは wire format を共有するので、**同じリポジトリで同時にリリースする**。プロトコル定数は `packages/akashic-player-ban/src/protocol.ts` にあり、`@multi-indiegame/akashic-player-ban/protocol` として双方から参照する。
 
 仕様は [akashic-external-protocol](https://github.com/multi-indiegame/akashic-external-protocol) の PROTOCOL.md にある。
+
+## ドキュメント
+
+- [akashic-cli-serve で動作確認する](./docs/akashic-cli-serve.md) — ゲーム開発者が `akashic serve` の上で追放を試すための手順。akashic-cli にパッチは不要
 
 ## 開発
 

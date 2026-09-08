@@ -18,17 +18,17 @@ export {
 } from "./protocol";
 
 /**
- * BAN の成立。全インスタンスが同一 tick で同一内容を受け取る。
+ * 追放の成立。全インスタンスが同一 tick で同一内容を受け取る。
  * ゲーム状態を変えてよいのはここだけ。
  *
- * このセッションで発行された BAN に限らず、実行基盤の管理画面など別の経路で
- * 確定した BAN も届く。
+ * このセッションで発行された追放に限らず、実行基盤の管理画面など別の経路で
+ * 確定した追放も届く。
  */
 export const onPlayerBanned: g.Trigger<PlayerBanNotification> =
     new g.Trigger<PlayerBanNotification>();
 
 /**
- * BAN の解除。性質は onPlayerBanned と同じ。
+ * 追放の解除。性質は onPlayerBanned と同じ。
  *
  * 解除を要求する API は無い（実行基盤の管理画面の仕事）。届いた解除に追従できる
  * よう、通知だけを受け取る。
@@ -92,7 +92,7 @@ g.game.onSceneChange.add(attachToScene);
 attachToScene(g.game.scene());
 
 /**
- * プレイヤーの BAN を要求する。
+ * プレイヤーの追放を要求する。
  *
  * **誰が発行してよいかは実行基盤が決める。** このライブラリは判定に関与せず、
  * 呼ばれたらそのまま要求を投げる。認められなければ reason:"Unauthorized" が返る

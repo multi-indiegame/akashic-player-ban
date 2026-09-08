@@ -34,9 +34,9 @@ const EVENT_CODE_MESSAGE = 32;
 export type PlayerBanAction = "banned" | "unbanned";
 
 /**
- * BAN が成立しなかった理由。
+ * 追放が成立しなかった理由。
  *
- * WHY: 「誰が BAN を発行してよいか」は実行基盤の決めごとなので、ここには
+ * WHY: 「誰が追放を発行してよいか」は実行基盤の決めごとなので、ここには
  * その基盤固有の役割名（部屋主・放送者など）を持ち込まない。権限が無くて
  * 断られた場合は一律 Unauthorized になる。
  */
@@ -47,7 +47,7 @@ export type BanResultReason =
     | "Unauthorized"
     /** 対象がこのセッションの参加者ではない */
     | "NotInRoom"
-    /** 自分自身は BAN できない */
+    /** 自分自身は追放できない */
     | "SelfBan"
     /** 件数上限・レート制限 */
     | "LimitExceeded"
@@ -82,11 +82,11 @@ export type NotificationEvent = [number, number, string, unknown];
 /**
  * `g.game.external.playerBan` に生えるオブジェクト。
  *
- * WHY: BAN を要求する口だけを置く。解除は実行基盤の管理画面の仕事で、コンテンツに
+ * WHY: 追放を要求する口だけを置く。解除は実行基盤の管理画面の仕事で、コンテンツに
  * 渡さない（ban は保護をかける操作で誤っても管理画面から戻せるが、unban は保護を
  * 外す操作で、外された側が得をする）。
  *
- * 発行の可否を問い合わせる口も置かない。**誰が BAN を発行できるかは実行基盤が
+ * 発行の可否を問い合わせる口も置かない。**誰が追放を発行できるかは実行基盤が
  * 決める**ことで、コンテンツはそれを知らないまま要求してよい。認められなければ
  * reason:"Unauthorized" が返る。
  */
@@ -142,7 +142,7 @@ export function buildNotificationEvent(
 }
 
 /**
- * 実行基盤が BAN / 解除の確定時に注入するイベントを組み立てる。
+ * 実行基盤が追放 / 解除の確定時に注入するイベントを組み立てる。
  *
  * `playerId` は実行基盤がコンテンツへ申告している in-game playerId
  * （コンテンツが `ev.player.id` で観測している値）を渡すこと。実行基盤の内部
