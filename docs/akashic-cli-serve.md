@@ -148,11 +148,38 @@ window.playerBanServe.confirm = null;
 ブラウザの devtools コンソールからそのまま叩ける口も生えている。
 
 ```js
-window.playerBanServe.ban("pid2");
-window.playerBanServe.unban("pid2"); // 解除の通知だけを流す
+window.playerBanServe.ban("pid2"); // コンテンツからの要求と同じ経路（確認 UI あり）
+window.playerBanServe.externalBan("pid2"); // 外部契機の追放
+window.playerBanServe.unban("pid2"); // 外部契機の解除
+window.playerBanServe.panel(); // 外部契機パネルの開閉
 ```
 
-**`unban` はコンテンツからは呼べない。** 解除は実行基盤の管理画面の仕事で、拡張の API に無いため。ただし `onPlayerUnbanned` を書いたなら試せないと困るので、「管理画面で解除された」状況を作る口を devtools 側にだけ置いている。
+**`externalBan` と `unban` はコンテンツからは呼べない**（`external` に無い）。下の「外部契機」を参照。
+
+## 外部契機の追放・解除を起こす
+
+実行基盤は、管理画面やチャット UI など**コンテンツの外**でも追放・解除を起こしうる。そこで確定した変化も通知する義務があり（PROTOCOL.md 6.C）、**コンテンツはそれに追従できなければならない**。`banPlayer()` を一度も呼んでいなくても `onPlayerBanned` / `onPlayerUnbanned` は飛んでくる。
+
+ゲーム画面の左下に出る **「外部契機」** ボタンを押すと、その状況を作る小さな操作盤が開く。playerId を入れて「追放する」「解除する」を押すだけ。
+
+- **確認ダイアログを通さず、発行権限も見ない。** 管理画面からの操作の模擬なので、コンテンツからの要求とは経路が違う
+- 追放中の playerId が一覧に出る
+
+確かめたいのはたとえばこういう挙動になる。
+
+| やること                             | 期待する結果                                            |
+| ------------------------------------ | ------------------------------------------------------- |
+| タイトル（募集）画面で外部契機の追放 | 参加表明済みの相手がゲーム開始メンバーから外れる        |
+| ゲーム進行中に外部契機の追放         | `onPlayerBanned` が飛び、ターン順から外れる             |
+| 外部契機の解除                       | `onPlayerUnbanned` が飛び、`isBanned()` が false に戻る |
+
+## 追放中の表示
+
+**追放された playerId の画面には、半透明のオーバーレイと「BAN 中」が出る。**
+
+自分の画面が対象かどうかは `store.player.id`（コンテンツから見た `g.game.selfId`）で判定している。別ウィンドウで起こした追放も、同一オリジンの `localStorage` 経由で伝わる。
+
+**これは表示だけで、切断も再入室拒否もしない。** 本物の実行基盤は「進行から外れるだけでなく閲覧もできない状態にする」義務を負う（PROTOCOL.md 6.B）。serve でオーバーレイ越しに操作できてしまっても、それは serve の限界であってコンテンツの不具合ではない。
 
 `sandbox.config.js` からプラグインに設定値を渡す口は無いので、本格的に作り替えるなら `node_modules/@multi-indiegame/akashic-player-ban-plugin/serve/plugin.js` をコンテンツ側にコピーして編集し、そのパスを `client.external` に書く。依存を持たない 1 ファイルなのでそのまま動く。
 

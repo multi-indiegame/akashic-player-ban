@@ -35,6 +35,12 @@
     const currentPlayId = () => serve()?.store?.currentPlay?.playId ?? null;
 
     /**
+     * この画面のプレイヤー id。`createLocalInstance({ player: store.player })`
+     * に渡される値なので、コンテンツから見た `g.game.selfId` と一致する。
+     */
+    const selfPlayerId = () => serve()?.store?.player?.id ?? null;
+
+    /**
      * WHY: 通知は playlog に載って全インスタンスへ配られなければならない。
      * g.game.raiseEvent() では playerId が自分のものになり、予約 playerId を
      * 名乗れない。serve は debug 権限の AMFlow を叩く HTTP API を持つのでそれを使う。
@@ -71,6 +77,114 @@
             return override !== "0" && override !== "false";
         }
         return params.get("experimentalIsChildWindow") !== "1";
+    };
+
+    // -------------------------------------------------- 追放中プレイヤーの共有
+
+    /**
+     * 誰が追放中かを serve のウィンドウ間で共有する。
+     *
+     * WHY: 本物の実行基盤はサーバー側に状態を持ち、コンテンツは playlog の通知で
+     * 知る。しかしこのバックエンドは serve のページ上で動くだけで playlog を
+     * 購読できず、別ウィンドウが発行した追放を知る手段がない。同一オリジンの
+     * localStorage と storage イベントで代用する。**表示のためだけの仕組み**で、
+     * 本物の実行基盤がこうすべきという話ではない。
+     */
+    const bannedKey = () =>
+        `playerBanServe:banned:${currentPlayId() ?? "latest"}`;
+
+    const readBanned = () => {
+        try {
+            const raw = localStorage.getItem(bannedKey());
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            return [];
+        }
+    };
+
+    const markBanned = (playerId, banned) => {
+        const ids = readBanned().filter((id) => id !== playerId);
+        if (banned) {
+            ids.push(playerId);
+        }
+        try {
+            localStorage.setItem(bannedKey(), JSON.stringify(ids));
+        } catch (e) {
+            // 保存できなくても通知そのものは流れている。表示だけ諦める
+        }
+        // WHY: storage イベントは書いた本人には飛ばないので、自分の分は直接呼ぶ
+        syncOverlay();
+        syncPanel();
+    };
+
+    // ------------------------------------------------------ 追放中オーバーレイ
+
+    let overlayNode = null;
+
+    /**
+     * この画面のプレイヤーが追放されているなら、ゲーム画面に半透明の膜をかける。
+     *
+     * serve は切断も再入室拒否もしないので、**これは表示だけ**。本物の実行基盤は
+     * 閲覧もできない状態にする義務を負う（PROTOCOL.md 6.B）。
+     */
+    const syncOverlay = () => {
+        const self = selfPlayerId();
+        const shouldShow = !!self && readBanned().indexOf(self) !== -1;
+        if (!shouldShow) {
+            if (overlayNode) {
+                overlayNode.remove();
+                overlayNode = null;
+            }
+            return;
+        }
+        if (overlayNode) {
+            return;
+        }
+        overlayNode = create(
+            "div",
+            {
+                position: "absolute",
+                top: "0",
+                left: "0",
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                flexFlow: "column nowrap",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                background: "rgba(0, 0, 0, 0.55)",
+                fontFamily: "sans-serif",
+                color: "#fff",
+                textAlign: "center",
+                pointerEvents: "none",
+                zIndex: "4",
+            },
+            { className: "player-ban-overlay" },
+        );
+        overlayNode.append(
+            create(
+                "p",
+                { margin: "0", fontSize: "22px", fontWeight: "bold" },
+                { textContent: "BAN 中" },
+            ),
+            create(
+                "p",
+                { margin: "0", fontSize: "12px", opacity: "0.85" },
+                {
+                    textContent: `この画面のプレイヤー (${self}) は追放されています`,
+                },
+            ),
+            create(
+                "p",
+                { margin: "0", fontSize: "11px", opacity: "0.7" },
+                {
+                    textContent:
+                        "serve は表示のみ。実際の切断・再入室拒否は行いません",
+                },
+            ),
+        );
+        gameScreenElement().append(overlayNode);
     };
 
     // ------------------------------------------------------------ 確認 UI
@@ -228,6 +342,124 @@
             accept.focus();
         });
 
+    // ---------------------------------------------- 外部契機パネル（管理画面の代役）
+
+    let panelNode = null;
+    let panelListNode = null;
+    let panelInputNode = null;
+
+    const syncPanel = () => {
+        if (!panelListNode) {
+            return;
+        }
+        const ids = readBanned();
+        panelListNode.textContent = ids.length
+            ? `追放中: ${ids.join(", ")}`
+            : "追放中: なし";
+    };
+
+    /**
+     * コンテンツを介さずに追放・解除を起こすための小さな操作盤。
+     *
+     * WHY: 実行基盤は管理画面やチャット UI など、コンテンツの外でも同種の状態変化を
+     * 起こしうる。そこで確定した変化も通知する義務がある（PROTOCOL.md 6.C）。
+     * コンテンツはその通知を受けて追従できなければならないので、開発中に
+     * 「外から起きた追放」を作れる口が要る。ここでの発行は確認ダイアログを通さず、
+     * 発行権限も見ない。管理画面からの操作の模擬だから。
+     */
+    const buildPanel = () => {
+        const root = create(
+            "div",
+            {
+                position: "absolute",
+                left: "8px",
+                bottom: "8px",
+                display: "flex",
+                flexFlow: "column nowrap",
+                gap: "6px",
+                padding: "8px 10px",
+                background: "rgba(255, 255, 255, 0.94)",
+                border: "1px solid silver",
+                borderRadius: "3px",
+                boxShadow: "0 1px 6px rgba(0, 0, 0, 0.3)",
+                fontFamily: "sans-serif",
+                fontSize: "12px",
+                color: "#333",
+                zIndex: "6",
+            },
+            { className: "player-ban-external-panel" },
+        );
+
+        const title = create(
+            "div",
+            { fontWeight: "bold", fontSize: "11px", color: "#666" },
+            { textContent: "外部契機（管理画面の代役）" },
+        );
+
+        panelInputNode = create(
+            "input",
+            {
+                font: "inherit",
+                fontSize: "12px",
+                padding: "3px 6px",
+                width: "150px",
+                border: "1px solid #ccc",
+                borderRadius: "2px",
+            },
+            { type: "text", placeholder: "playerId (例: pid2)" },
+        );
+
+        const row = create("div", { display: "flex", gap: "6px" });
+        const banBtn = button("追放する", true);
+        const unbanBtn = button("解除する", false);
+        banBtn.className = "player-ban-external-ban";
+        unbanBtn.className = "player-ban-external-unban";
+        banBtn.addEventListener("click", () => {
+            const id = panelInputNode.value.trim();
+            if (id) {
+                api.externalBan(id);
+            }
+        });
+        unbanBtn.addEventListener("click", () => {
+            const id = panelInputNode.value.trim();
+            if (id) {
+                api.unban(id);
+            }
+        });
+        row.append(banBtn, unbanBtn);
+
+        panelListNode = create(
+            "div",
+            { fontSize: "11px", color: "#666", maxWidth: "180px" },
+            { textContent: "追放中: なし" },
+        );
+
+        root.append(title, panelInputNode, row, panelListNode);
+        return root;
+    };
+
+    const togglePanel = (open) => {
+        const shouldOpen = open == null ? !panelNode : open;
+        if (!shouldOpen) {
+            if (panelNode) {
+                panelNode.remove();
+                panelNode = null;
+                panelListNode = null;
+                panelInputNode = null;
+            }
+            return;
+        }
+        if (panelNode) {
+            return;
+        }
+        panelNode = buildPanel();
+        gameScreenElement().append(panelNode);
+        syncPanel();
+        if (selfPlayerId()) {
+            panelInputNode.placeholder = `playerId (自分は ${selfPlayerId()})`;
+        }
+    };
+
     // ------------------------------------------------------------ 本体
 
     const request = async (playerId, callback) => {
@@ -243,11 +475,7 @@
                 callback({ ok: false, playerId, reason: "Rejected" });
                 return;
             }
-            await sendEvents([
-                buildBanNotificationEvent("banned", playerId),
-                // 実行基盤の契約「状態変化の実効化」の模擬。切断したことにする
-                [EVENT_CODE_LEAVE, 0, playerId],
-            ]);
+            await notifyBanned(playerId);
             callback({ ok: true, playerId });
         } catch (e) {
             console.error("[playerBan/serve] ban failed", e);
@@ -255,29 +483,104 @@
         }
     };
 
+    /** 追放の通知を流し、表示用の状態にも反映する */
+    const notifyBanned = async (playerId) => {
+        await sendEvents([
+            buildBanNotificationEvent("banned", playerId),
+            // 実行基盤の契約「状態変化の実効化」の模擬。切断したことにする
+            [EVENT_CODE_LEAVE, 0, playerId],
+        ]);
+        markBanned(playerId, true);
+    };
+
+    const notifyUnbanned = async (playerId) => {
+        await sendEvents([buildBanNotificationEvent("unbanned", playerId)]);
+        markBanned(playerId, false);
+    };
+
     const api = {
         /** 確認 UI。差し替え可。null にすると確認なしで実行する */
         confirm: defaultConfirm,
-        /** devtools コンソールから直接叩く用 */
+        /**
+         * コンテンツからの要求と同じ経路。発行権限を見て、確認 UI を挟む。
+         * devtools コンソールから直接叩く用。
+         */
         ban: (playerId) => request(playerId, (result) => console.log(result)),
         /**
-         * 解除の通知だけを流す。**コンテンツからは呼べない**（external に無い）。
+         * 外部契機の追放。**コンテンツからは呼べない**（external に無い）。
+         *
+         * WHY: 管理画面やチャット UI で確定した追放も通知する義務がある
+         * （PROTOCOL.md 6.C）。コンテンツがそれに追従できるかを試す口。
+         * 発行権限も確認 UI も通さない。管理画面からの操作の模擬だから。
+         */
+        externalBan: (playerId) =>
+            notifyBanned(playerId).then(
+                () => console.log({ ok: true, playerId }),
+                (e) => console.error("[playerBan/serve] externalBan failed", e),
+            ),
+        /**
+         * 解除の通知を流す。**コンテンツからは呼べない**（external に無い）。
          *
          * WHY: 解除は実行基盤の管理画面の仕事で、拡張の API には無い。ただし
          * onPlayerUnbanned を書いたコンテンツはそれを試せないと困るので、
-         * 「管理画面で解除された」状況を作る口を devtools 側にだけ置く。
+         * 「管理画面で解除された」状況を作る口をこちらに置く。
          */
         unban: (playerId) =>
-            sendEvents([buildBanNotificationEvent("unbanned", playerId)]).then(
+            notifyUnbanned(playerId).then(
                 () => console.log({ ok: true, playerId }),
                 (e) => console.error("[playerBan/serve] unban failed", e),
             ),
+        /** 外部契機パネルの開閉。引数省略でトグル */
+        panel: (open) => togglePanel(open),
     };
 
     // WHY: require.resolve() ではなく誤って require() された場合に、
     // ここで ReferenceError を投げて serve を起動不能にしないようにする。
     if (typeof window !== "undefined") {
         window.playerBanServe = api;
+
+        // 別ウィンドウが発行した追放・解除に追従する
+        window.addEventListener("storage", (ev) => {
+            if (ev.key === null || ev.key === bannedKey()) {
+                syncOverlay();
+                syncPanel();
+            }
+        });
+
+        // ゲーム画面が組み上がるのを待ってから、状態を反映しハンドルを出す
+        const boot = () => {
+            if (!serve()) {
+                window.setTimeout(boot, 300);
+                return;
+            }
+            syncOverlay();
+            const handle = button("外部契機", false);
+            Object.assign(handle.style, {
+                position: "absolute",
+                left: "8px",
+                bottom: "8px",
+                fontSize: "11px",
+                padding: "3px 10px",
+                opacity: "0.75",
+                zIndex: "6",
+            });
+            handle.className = "player-ban-external-handle";
+            handle.addEventListener("click", () => {
+                togglePanel();
+                handle.style.display = panelNode ? "none" : "";
+            });
+            gameScreenElement().append(handle);
+            // パネルを閉じたらハンドルを戻す
+            const observer = window.setInterval(() => {
+                if (!panelNode) {
+                    handle.style.display = "";
+                }
+            }, 500);
+            window.addEventListener("beforeunload", () =>
+                window.clearInterval(observer),
+            );
+        };
+        boot();
     }
 
     // external に生やすのは ban だけ。解除も、発行してよいかの問い合わせも置かない

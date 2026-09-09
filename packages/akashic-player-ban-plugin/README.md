@@ -37,6 +37,8 @@ view.registerExternalPlugin(new PlayerBanPlugin(backend));
 
 ゲーム開発者向け。`sandbox.config.js` の `client.external` から `serve` サブパスを参照すると、`akashic serve` の上で `g.game.external.playerBan` が生え、確認ダイアログ付きで追放を試せる。
 
+**外部契機（6.C）の模擬と、追放中の表示も持つ。** ゲーム画面左下の「外部契機」ボタンから、コンテンツを介さない追放・解除を起こせる。追放された playerId の画面には半透明のオーバーレイと「BAN 中」が出る（表示のみ。切断はしない）。
+
 ```js
 // sandbox.config.js
 module.exports = {
