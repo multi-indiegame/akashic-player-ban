@@ -371,9 +371,11 @@
         const root = create(
             "div",
             {
-                position: "absolute",
-                left: "8px",
-                bottom: "8px",
+                // WHY: ゲーム画面の中に置くとコンテンツ自身の UI を覆ってしまう。
+                // 操作盤は常時出ているので、画面外のページ隅に固定する
+                position: "fixed",
+                left: "12px",
+                bottom: "12px",
                 display: "flex",
                 flexFlow: "column nowrap",
                 gap: "6px",
@@ -453,7 +455,7 @@
             return;
         }
         panelNode = buildPanel();
-        gameScreenElement().append(panelNode);
+        document.body.append(panelNode);
         syncPanel();
         if (selfPlayerId()) {
             panelInputNode.placeholder = `playerId (自分は ${selfPlayerId()})`;
@@ -556,12 +558,12 @@
             syncOverlay();
             const handle = button("外部契機", false);
             Object.assign(handle.style, {
-                position: "absolute",
-                left: "8px",
-                bottom: "8px",
+                position: "fixed",
+                left: "12px",
+                bottom: "12px",
                 fontSize: "11px",
                 padding: "3px 10px",
-                opacity: "0.75",
+                opacity: "0.8",
                 zIndex: "6",
             });
             handle.className = "player-ban-external-handle";
@@ -569,7 +571,7 @@
                 togglePanel();
                 handle.style.display = panelNode ? "none" : "";
             });
-            gameScreenElement().append(handle);
+            document.body.append(handle);
             // パネルを閉じたらハンドルを戻す
             const observer = window.setInterval(() => {
                 if (!panelNode) {
