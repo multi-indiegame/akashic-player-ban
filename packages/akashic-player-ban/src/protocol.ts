@@ -33,20 +33,26 @@ const EVENT_CODE_MESSAGE = 32;
 
 export type PlayerBanAction = "banned" | "unbanned";
 
+/**
+ * 追放が成立しなかった理由。
+ *
+ * WHY: 「誰が追放を発行してよいか」は実行基盤の決めごとなので、ここには
+ * その基盤固有の役割名（部屋主・放送者など）を持ち込まない。権限が無くて
+ * 断られた場合は一律 Unauthorized になる。
+ */
 export type BanResultReason =
-    /** 拡張が無い環境（headless runner、akashic-cli-serve、非対応の実行基盤） */
+    /** 拡張が無い環境（headless runner や、この拡張に対応していない実行基盤） */
     | "NotSupported"
-    /** 部屋主ではないインスタンス */
-    | "NotGameMaster"
-    /** 対象がこの部屋の視聴者ではない */
+    /** 実行基盤が発行を認めなかった。権限が無い場合はこれ */
+    | "Unauthorized"
+    /** 対象がこのセッションの参加者ではない */
     | "NotInRoom"
     /** 自分自身は追放できない */
     | "SelfBan"
     /** 件数上限・レート制限 */
     | "LimitExceeded"
-    /** 部屋主が確認ダイアログで拒否した */
+    /** 実行基盤の確認 UI で拒否された */
     | "Rejected"
-    | "Unauthorized"
     | "InternalError";
 
 export interface BanResult {
@@ -73,20 +79,19 @@ export interface PlayerBanNotificationPayload {
  */
 export type NotificationEvent = [number, number, string, unknown];
 
-export interface PlayerBanExternalContext {
-    canBan: boolean;
-}
-
-/** `g.game.external.playerBan` に生えるオブジェクト */
+/**
+ * `g.game.external.playerBan` に生えるオブジェクト。
+ *
+ * WHY: 追放を要求する口だけを置く。解除は実行基盤の管理画面の仕事で、コンテンツに
+ * 渡さない（ban は保護をかける操作で誤っても管理画面から戻せるが、unban は保護を
+ * 外す操作で、外された側が得をする）。
+ *
+ * 発行の可否を問い合わせる口も置かない。**誰が追放を発行できるかは実行基盤が
+ * 決める**ことで、コンテンツはそれを知らないまま要求してよい。認められなければ
+ * reason:"Unauthorized" が返る。
+ */
 export interface PlayerBanExternal {
-    getContext: (param: {
-        callback: (context: PlayerBanExternalContext) => void;
-    }) => void;
     ban: (param: {
-        playerId: string;
-        callback: (result: BanResult) => void;
-    }) => void;
-    unban: (param: {
         playerId: string;
         callback: (result: BanResult) => void;
     }) => void;
@@ -111,9 +116,7 @@ export interface ObjectSignature {
 export const UNTRUSTED_SIGNATURE: ObjectSignature = {
     type: "object",
     content: {
-        getContext: { type: "function", callbackProp: "arguments[0].callback" },
         ban: { type: "function", callbackProp: "arguments[0].callback" },
-        unban: { type: "function", callbackProp: "arguments[0].callback" },
     },
 };
 
@@ -139,7 +142,7 @@ export function buildNotificationEvent(
 }
 
 /**
- * 実行基盤が BAN / 解除の確定時に注入するイベントを組み立てる。
+ * 実行基盤が追放 / 解除の確定時に注入するイベントを組み立てる。
  *
  * `playerId` は実行基盤がコンテンツへ申告している in-game playerId
  * （コンテンツが `ev.player.id` で観測している値）を渡すこと。実行基盤の内部

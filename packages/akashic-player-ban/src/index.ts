@@ -17,33 +17,25 @@ export {
     NOTIFICATION_VERSION,
 } from "./protocol";
 
-export interface BanContext {
-    /** 部屋主の player.id。JoinEvent 由来なので全インスタンスで同じ値 */
-    gameMasterId: string | null;
-    /** 自分がこのインスタンスで追放を発行できるか（＝自分が部屋主か） */
-    canBan: boolean;
-}
-
 /**
  * 追放の成立。全インスタンスが同一 tick で同一内容を受け取る。
  * ゲーム状態を変えてよいのはここだけ。
  *
- * この部屋で発行された追放に限らず、部屋主の他の部屋や実行基盤の設定画面で
+ * このセッションで発行された追放に限らず、実行基盤の管理画面など別の経路で
  * 確定した追放も届く。
  */
 export const onPlayerBanned: g.Trigger<PlayerBanNotification> =
     new g.Trigger<PlayerBanNotification>();
 
-/** 追放の解除。性質は onPlayerBanned と同じ */
+/**
+ * 追放の解除。性質は onPlayerBanned と同じ。
+ *
+ * 解除を要求する API は無い（実行基盤の管理画面の仕事）。届いた解除に追従できる
+ * よう、通知だけを受け取る。
+ */
 export const onPlayerUnbanned: g.Trigger<PlayerBanNotification> =
     new g.Trigger<PlayerBanNotification>();
 
-let _gameMasterId: string | null = null;
-let _canBan = false;
-let _contextResolved = false;
-let _joinSeen = false;
-let _joinGraceExpired = false;
-let _prepareCallback: ((info: BanContext) => void) | null = null;
 const _bannedPlayerIds: string[] = [];
 
 function findExternal(): PlayerBanExternal | null {
@@ -56,27 +48,6 @@ function findExternal(): PlayerBanExternal | null {
         return null;
     }
     return found;
-}
-
-function firePrepareIfReady(): void {
-    if (!_prepareCallback || !_contextResolved) {
-        return;
-    }
-    if (!_joinSeen && !_joinGraceExpired) {
-        return;
-    }
-    const callback = _prepareCallback;
-    _prepareCallback = null;
-    callback({ gameMasterId: _gameMasterId, canBan: _canBan });
-}
-
-function handleJoin(ev: g.JoinEvent): void {
-    if (_joinSeen) {
-        return;
-    }
-    _joinSeen = true;
-    _gameMasterId = ev.player && ev.player.id ? ev.player.id : null;
-    firePrepareIfReady();
 }
 
 function handleMessage(ev: g.MessageEvent): void {
@@ -106,9 +77,10 @@ function handleMessage(ev: g.MessageEvent): void {
 }
 
 /**
- * WHY: MessageEvent は Game ではなく Scene に届く（Game に onMessage は無い）。
- * カレントシーンが変わるたびに登録し直すことで、ローカルシーンを挟んでも
- * 全インスタンスがどこかのシーンで通知を受け取れる状態を保つ。
+ * WHY: MessageEvent は Game ではなく `g.Scene#onMessage` にしか届かず、Scene は
+ * コンテンツが自由に積み替える。カレントシーンが変わるたびに登録し直すことで、
+ * **コンテンツ側に「Scene を変えるな」という制約を課さずに**受信を担保する。
+ * これはライブラリ側の責務（PROTOCOL.md 7-6）。
  */
 function attachToScene(scene: g.Scene | undefined): void {
     if (!scene || scene.onMessage.contains(handleMessage)) {
@@ -117,59 +89,27 @@ function attachToScene(scene: g.Scene | undefined): void {
     scene.onMessage.add(handleMessage);
 }
 
-g.game.onJoin.add(handleJoin);
 g.game.onSceneChange.add(attachToScene);
 attachToScene(g.game.scene());
 
 /**
- * 起動時（モジュール読み込み直後）に一度だけ呼ぶ。
- * JoinEvent を取り逃さないよう、シーン生成より前に呼ぶこと。
+ * プレイヤーの追放を要求する。
  *
- * callback はローカル。ここで得た canBan で出し分けるものはローカルエンティティに置く。
- * gameMasterId だけは全インスタンス共通なのでゲーム状態に使ってよい。
+ * **誰が発行してよいかは実行基盤が決める。** このライブラリは判定に関与せず、
+ * 呼ばれたらそのまま要求を投げる。認められなければ reason:"Unauthorized" が返る
+ * （例: みんなでゲーム! では部屋主のインスタンスからの要求だけを受け付ける）。
+ *
+ * WHY: 権限をこちらで判定しようとすると、実行基盤ごとに違う役割（部屋主・放送者・
+ * モデレーター…）をライブラリが知る必要が出るうえ、たとえば部屋主を JoinEvent から
+ * 割り出す実装にすると、コンテンツ側のハンドラ登録との順序で取れたり取れなかったり
+ * する。誰が発行できるかは実行基盤の決めごとに戻す。ボタンの出し分けが要るなら、
+ * コンテンツが自分で知っている情報（g.game.selfId と、コンテンツが把握している
+ * 部屋主の id など）で行う。
+ *
+ * callback はローカル。**進行から外すのは onPlayerBanned の中だけで行うこと。**
+ * 押した時点で外すと、実行基盤に拒否されたときコンテンツだけが「いない」と思い込む。
  */
-export function prepare(callback: (info: BanContext) => void): void {
-    _prepareCallback = callback;
-
-    const external = findExternal();
-    if (!external) {
-        _canBan = false;
-        _contextResolved = true;
-    } else {
-        external.getContext({
-            callback: (context) => {
-                _canBan = !!(context && context.canBan);
-                _contextResolved = true;
-                firePrepareIfReady();
-            },
-        });
-    }
-
-    // WHY: JoinEvent を流さない実行基盤でも prepare が沈黙しないよう、最初の
-    // update まで待って gameMasterId: null で発火する。ここで待たずに即発火すると、
-    // Join を流す実行基盤で gameMasterId を取り逃す。
-    const expireJoinGrace = (): void => {
-        g.game.onUpdate.remove(expireJoinGrace);
-        _joinGraceExpired = true;
-        firePrepareIfReady();
-    };
-    g.game.onUpdate.add(expireJoinGrace);
-
-    firePrepareIfReady();
-}
-
-/** 部屋主の playerId。全インスタンスで同じ値なのでゲーム状態に使ってよい */
-export function gameMasterId(): string | null {
-    return _gameMasterId;
-}
-
-/** 自分が追放を発行できる立場か。インスタンス固有（表示の出し分け専用） */
-export function canBan(): boolean {
-    return _canBan;
-}
-
-function request(
-    kind: "ban" | "unban",
+export function banPlayer(
     playerId: string,
     callback?: (result: BanResult) => void,
 ): void {
@@ -183,15 +123,7 @@ function request(
         done({ ok: false, playerId: playerId, reason: "NotSupported" });
         return;
     }
-    if (!_canBan) {
-        done({ ok: false, playerId: playerId, reason: "NotGameMaster" });
-        return;
-    }
-    if (kind === "ban" && playerId === g.game.selfId) {
-        done({ ok: false, playerId: playerId, reason: "SelfBan" });
-        return;
-    }
-    external[kind]({
+    external.ban({
         playerId: playerId,
         callback: (result) => {
             done(
@@ -203,26 +135,6 @@ function request(
             );
         },
     });
-}
-
-/**
- * 追放する。部屋主のインスタンス以外では reason:"NotGameMaster" で即返る。
- *
- * callback はローカル。進行から外すのは onPlayerBanned の中だけで行うこと。
- */
-export function banPlayer(
-    playerId: string,
-    callback?: (result: BanResult) => void,
-): void {
-    request("ban", playerId, callback);
-}
-
-/** 追放を解除する。スコープは実行基盤の仕様に従う */
-export function unbanPlayer(
-    playerId: string,
-    callback?: (result: BanResult) => void,
-): void {
-    request("unban", playerId, callback);
 }
 
 /** 通知を積み上げた決定的な状態 */
