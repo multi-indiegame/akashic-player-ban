@@ -1,14 +1,10 @@
 {
-  "name": "@multi-indiegame/akashic-player-ban-plugin",
+  "name": "@multi-indiegame/akashic-player-ban-serve",
   "version": "1.0.0",
-  "description": "ゲーム進行からプレイヤーを追放するための Akashic Engine 拡張（コンテンツ実行基盤側のプラグイン）",
+  "description": "@multi-indiegame/akashic-player-ban を akashic serve の上で動作確認するためのバックエンド",
   "main": "lib/index.js",
-  "typings": "lib/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "default": "./lib/index.js"
-    },
+    ".": "./lib/index.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -20,23 +16,24 @@
   ],
   "scripts": {
     "clean": "rimraf ./lib",
-    "build": "npm run clean && tsc -p ./",
+    "build": "npm run clean && tsc -p ./ && node ./scripts/build.js",
     "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/multi-indiegame/akashic-player-ban.git",
-    "directory": "packages/akashic-player-ban-plugin"
+    "directory": "packages/akashic-player-ban-serve"
   },
   "keywords": [
     "akashic",
+    "akashic-serve",
     "akashic-extension"
   ],
   "license": "MIT",
-  "dependencies": {
-    "@multi-indiegame/akashic-player-ban": "1.0.0"
-  },
   "devDependencies": {
+    "@multi-indiegame/akashic-player-ban": "1.0.0",
+    "@multi-indiegame/akashic-serve-extension-dock": "^1.0.0",
+    "esbuild": "^0.25.0",
     "rimraf": "^6.0.1",
     "typescript": "^5.7.2"
   },
