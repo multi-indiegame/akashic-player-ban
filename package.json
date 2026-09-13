@@ -16,9 +16,11 @@
   "scripts": {
     "build": "npm run build -w @multi-indiegame/akashic-player-ban && npm run build -w @multi-indiegame/akashic-player-ban-coe && npm run build -w @multi-indiegame/akashic-player-ban-plugin && npm run build -w @multi-indiegame/akashic-player-ban-serve",
     "clean": "rimraf packages/*/lib packages/akashic-player-ban-serve/plugin.js",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "version-packages": "changeset version && npm install --package-lock-only"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.2",
     "prettier": "^3.9.6",
     "rimraf": "^6.0.1",
     "typescript": "^5.7.2"
