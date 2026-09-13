@@ -183,8 +183,11 @@ const allowMode = (): AllowMode => {
  * プレイを作ったウィンドウのプレイヤーが放送者として Join する（akashic serve が
  * createPlay の initialJoinPlayer に自分の store.player を渡す）。akashic serve
  * 自身も「このウィンドウが放送者か」を currentPlay.joinedPlayerTable に自分の id が
- * あるかで判定しているので、それに揃える。nicolive 以外のモードでは、この表には
- * 「Join Me」で参加した人が入るだけで放送者の意味は無いので見ない。
+ * あるかで判定しているので、それに揃える。表の全員を放送者とみなしてよいのは、
+ * nicolive 系のモードでは akashic serve が「Join Me」を押せなくしており
+ * （isJoinEnabled が targetService を見ている）、後から Join する経路が無いため。
+ * nicolive 以外のモードでは、この表には「Join Me」で参加した人が入るだけで
+ * 放送者の意味は無いので見ない。
  */
 const broadcasterIds = (): string[] | null => {
     const store = serve()?.store;

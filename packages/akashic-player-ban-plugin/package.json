@@ -34,7 +34,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@multi-indiegame/akashic-player-ban": "1.0.0"
+    "@multi-indiegame/akashic-player-ban": "^1.0.0"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",
