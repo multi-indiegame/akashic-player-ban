@@ -9,16 +9,21 @@
   "license": "MIT",
   "workspaces": [
     "packages/akashic-player-ban",
-    "packages/akashic-player-ban-plugin"
+    "packages/akashic-player-ban-coe",
+    "packages/akashic-player-ban-plugin",
+    "packages/akashic-player-ban-serve"
   ],
   "scripts": {
-    "build": "npm run build -w @multi-indiegame/akashic-player-ban && npm run build -w @multi-indiegame/akashic-player-ban-plugin",
-    "clean": "rimraf packages/*/lib",
+    "build": "npm run build -w @multi-indiegame/akashic-player-ban && npm run build -w @multi-indiegame/akashic-player-ban-coe && npm run build -w @multi-indiegame/akashic-player-ban-plugin && npm run build -w @multi-indiegame/akashic-player-ban-serve",
+    "clean": "rimraf packages/*/lib packages/akashic-player-ban-serve/plugin.js",
     "format": "prettier --write ."
   },
   "devDependencies": {
     "prettier": "^3.9.6",
     "rimraf": "^6.0.1",
     "typescript": "^5.7.2"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
   }
 }

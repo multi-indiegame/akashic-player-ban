@@ -1,21 +1,33 @@
-/// <reference types="@akashic/akashic-engine/index.runtime" />
-
 import {
     BanResult,
     EXTERNAL_KEY,
     PlayerBanExternal,
     PlayerBanNotification,
+    PlayerBanNotificationPayload,
     decodeBanNotification,
 } from "./protocol";
 
 export {
     BanResult,
     BanResultReason,
+    PlayerBanAction,
     PlayerBanNotification,
+    PlayerBanNotificationPayload,
     RESERVED_PLAYER_ID,
     NOTIFICATION_TYPE,
     NOTIFICATION_VERSION,
+    // WHY: サブパス (@multi-indiegame/akashic-player-ban/protocol) は
+    // package.json の exports 由来で、Akashic の g._require は exports を
+    // 解釈しない。実行基盤アダプタが本体エントリだけで完結できるよう、
+    // decode もここから出す。
+    decodeBanNotification,
 } from "./protocol";
+
+/*
+ * WHY: lib に DOM を含めていないので console の型が無い。設定ミスを知らせる
+ * 警告にだけ使うので、必要な形だけをここで宣言する。
+ */
+declare const console: { warn?: (...data: unknown[]) => void } | undefined;
 
 /**
  * 追放の成立。全インスタンスが同一 tick で同一内容を受け取る。
@@ -58,6 +70,28 @@ function handleMessage(ev: g.MessageEvent): void {
     if (!payload) {
         return;
     }
+    acceptBanNotification(payload);
+}
+
+/**
+ * 確定した通知を状態へ取り込む。
+ *
+ * 通常は g.Scene#onMessage から呼ばれる。**MessageEvent を握り潰す
+ * フレームワークの上では、通知はコンテンツ側の別経路で運ばれてくる。**
+ * その経路から状態機械へ入るための口である（例: coe は届いた MessageEvent を
+ * すべて Controller のアクションへ変換し、tick に載せない。
+ * @multi-indiegame/akashic-player-ban-coe を参照）。
+ *
+ * WHY: 重複排除をここに置いているのは、全インスタンスが同じ判定で収束する
+ * 必要があるため。運搬経路の送信側に置くと instance 間で state がずれる。
+ *
+ * 発行者の検証（予約 playerId を名乗っているか）は**呼び出し側の責務**。
+ *
+ * @internal 実行基盤アダプタ用。通常のコンテンツは使わない。
+ */
+export function acceptBanNotification(
+    payload: PlayerBanNotificationPayload,
+): void {
     const index = _bannedPlayerIds.indexOf(payload.playerId);
     if (payload.action === "banned") {
         // WHY: 同じ確定が再送されても進行を二重に動かさないよう、状態が実際に
@@ -76,6 +110,48 @@ function handleMessage(ev: g.MessageEvent): void {
     }
 }
 
+let _bridgeInstalled = false;
+let _warnedAboutSwallowing = false;
+
+/**
+ * 通知の運搬をアダプタが引き受けたことを申告する。
+ *
+ * 申告が無いまま MessageEvent を握り潰すフレームワークを検出すると、
+ * ライブラリは警告を出す。
+ *
+ * @internal 実行基盤アダプタ用。通常のコンテンツは使わない。
+ */
+export function markNotificationBridgeInstalled(): void {
+    _bridgeInstalled = true;
+}
+
+/**
+ * WHY: この拡張の最悪の壊れ方は「banPlayer() が ok を返すのに何も起きない」で、
+ * 原因がフレームワークの内部にあるため追跡にひどく時間がかかる。握り潰す
+ * フレームワークを検出したら、黙って失敗せずに知らせる。
+ *
+ * coe の Scene は onCommandReceive を持つ。これを目印にする。coe に依存すると
+ * 版を固定することになるので、型ではなく形で見る。
+ */
+function warnIfNotificationsAreSwallowed(scene: g.Scene): void {
+    if (_bridgeInstalled || _warnedAboutSwallowing) {
+        return;
+    }
+    const suspect = scene as unknown as { onCommandReceive?: unknown };
+    if (!suspect.onCommandReceive) {
+        return;
+    }
+    _warnedAboutSwallowing = true;
+    if (typeof console !== "undefined" && console && console.warn) {
+        console.warn(
+            "[akashic-player-ban] このシーンは g.MessageEvent を握り潰す" +
+                "フレームワーク (coe 等) のものに見えます。" +
+                "このままでは onPlayerBanned は発火しません。" +
+                "@multi-indiegame/akashic-player-ban-coe を導入してください。",
+        );
+    }
+}
+
 /**
  * WHY: MessageEvent は Game ではなく `g.Scene#onMessage` にしか届かず、Scene は
  * コンテンツが自由に積み替える。カレントシーンが変わるたびに登録し直すことで、
@@ -87,10 +163,27 @@ function attachToScene(scene: g.Scene | undefined): void {
         return;
     }
     scene.onMessage.add(handleMessage);
+    warnIfNotificationsAreSwallowed(scene);
 }
 
 g.game.onSceneChange.add(attachToScene);
 attachToScene(g.game.scene());
+
+/**
+ * このインスタンスで追放を要求できるか（`g.game.external.playerBan` があるか）。
+ *
+ * **結果はローカル。** 同じ実行基盤の上でも、プレイヤーの画面では true、
+ * サーバ側で動くインスタンス（headless runner など）では false ということがある。
+ * 追放ボタンを出すかどうかのようなローカルな判断にだけ使い、ゲーム状態をこれで
+ * 分岐させないこと。
+ *
+ * WHY: 対応・非対応の両方の実行基盤に同じコンテンツを投稿するとき、非対応の
+ * 実行基盤では押しても何も起きないボタンを出したくない。banPlayer() を呼んで
+ * NotSupported が返るのを待つのでは、ボタンを出す前に判断できない。
+ */
+export function isSupported(): boolean {
+    return findExternal() !== null;
+}
 
 /**
  * プレイヤーの追放を要求する。
@@ -130,7 +223,7 @@ export function banPlayer(
                 result || {
                     ok: false,
                     playerId: playerId,
-                    reason: "InternalError",
+                    reason: "Unknown",
                 },
             );
         },

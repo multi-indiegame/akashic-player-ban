@@ -2,16 +2,9 @@
 
 `@multi-indiegame/akashic-player-ban` を受け入れる**コンテンツ実行基盤**向けのプラグイン。`g.game.external.playerBan` を生やし、要求を `PlayerBanBackend` へ委譲する。
 
-ゲーム開発者が使うのはこちらではなく [`@multi-indiegame/akashic-player-ban`](../akashic-player-ban) の方。ただし後述の `serve` サブパスだけは例外で、ゲーム開発者が動作確認に使う。
+**Akashic Engine のマルチモードをサポートする実行基盤（PROTOCOL.md でいうマルチモード実行基盤）を作る人**向け。実行基盤側に必要な処理を把握している前提で書いてある。プラグインは `JoinEvent` の送出に関与しないので、ニコ生ゲームマルチプレイ仕様をサポートする実行基盤にも同じように組み込める。
 
-## 2 つのエントリポイント
-
-| import                                             | 使う人           | 形                                                                    |
-| -------------------------------------------------- | ---------------- | --------------------------------------------------------------------- |
-| `@multi-indiegame/akashic-player-ban-plugin`       | 実行基盤の開発者 | `registerExternalPlugin()` に渡す `PlayerBanPlugin` クラス            |
-| `@multi-indiegame/akashic-player-ban-plugin/serve` | ゲーム開発者     | akashic-cli-serve の `sandbox.config.js` から参照する単一 JS ファイル |
-
-形が違うのは、akashic-cli-serve が「external オブジェクトを返す関数を `module.exports` に持つ単一ファイル」を要求し、評価スコープに `require()` が無いため。`serve/plugin.js` は依存を持たず、プロトコル定数を自前で持っている。**`src/protocol.ts` を変えたら `serve/plugin.js` も合わせること。**
+ゲーム開発者が使うのはこちらではなく [`@multi-indiegame/akashic-player-ban`](../akashic-player-ban) の方。`akashic serve` での動作確認に使う代役のバックエンドは [`@multi-indiegame/akashic-player-ban-serve`](../akashic-player-ban-serve) に分かれている。
 
 ## 使い方
 
@@ -32,26 +25,6 @@ view.registerExternalPlugin(new PlayerBanPlugin(backend));
 生えるのは `ban` だけ。解除の口も、発行してよいかを問い合わせる口も持たない。
 
 `registerExternalPlugin()` は duck typing なので、`@akashic/agvw` でも互換実装でも構造的に通る。プラグイン側は実行基盤の型に依存しない。
-
-## akashic-cli-serve での動作確認
-
-ゲーム開発者向け。`sandbox.config.js` の `client.external` から `serve` サブパスを参照すると、`akashic serve` の上で `g.game.external.playerBan` が生え、確認ダイアログ付きで追放を試せる。
-
-**外部契機（6.C）の模擬と、追放中の表示も持つ。** ゲーム画面左下の「外部契機」ボタンから、コンテンツを介さない追放・解除を起こせる。追放された playerId の画面には半透明のオーバーレイと「BAN 中」が出る（表示のみ。切断はしない）。
-
-```js
-// sandbox.config.js
-module.exports = {
-  client: {
-    external: {
-      playerBan:
-        require.resolve("@multi-indiegame/akashic-player-ban-plugin/serve"),
-    },
-  },
-};
-```
-
-`require()` ではなく `require.resolve()`。serve に渡すのはパスであって値ではない。手順の全体は [docs/akashic-cli-serve.md](../../docs/akashic-cli-serve.md) にある。
 
 ## 実行基盤が満たすべき契約
 

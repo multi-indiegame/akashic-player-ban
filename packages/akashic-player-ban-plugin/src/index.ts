@@ -23,9 +23,8 @@ export {
 /**
  * 実行基盤の ExternalPlugin 型の最小形。
  *
- * WHY: `registerExternalPlugin()` は duck typing で、公式の @akashic/agvw は
- * minify 済みで .d.ts すら配っていない。実行基盤の型を import すると依存が生えるので、
- * 構造だけをここで自前定義する。agvw / agvw-like のどちらに登録しても構造的に通る。
+ * WHY: `registerExternalPlugin()` は duck typing で、公式の @akashic/agvw に型定義なし。
+ * 必要な構造のみここで定義する。
  */
 export interface ExternalPluginLike {
     name: string;
@@ -45,9 +44,7 @@ export interface ExternalPluginLike {
  *
  * **誰が追放を発行してよいかはこの実装が決める。** 判定は必ずサーバー側で行い、
  * 認めない要求には reason:"Unauthorized" を返すこと。クライアント側で先に握り潰す
- * 実装を足しても構わないが、それは通信を減らすための最適化であって防御ではない
- * （コンテンツは実行基盤と同一オリジンで動くことがあり、このプラグインを経由せず
- * API を直接叩ける）。
+ * 実装を加えてもよいが、それは通信を減らすための最適化であって防御にはならない点に注意。
  */
 export interface PlayerBanBackend {
     /** 追放を要求する */
@@ -78,7 +75,7 @@ export class PlayerBanPlugin implements ExternalPluginLike {
                     result || {
                         ok: false,
                         playerId: playerId,
-                        reason: "InternalError",
+                        reason: "Unknown",
                     },
                 );
             },
@@ -86,7 +83,7 @@ export class PlayerBanPlugin implements ExternalPluginLike {
                 callback({
                     ok: false,
                     playerId: playerId,
-                    reason: "InternalError",
+                    reason: "Unknown",
                 });
             },
         );
