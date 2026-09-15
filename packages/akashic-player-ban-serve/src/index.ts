@@ -20,6 +20,7 @@
  */
 import {
     buildBanNotificationEvent,
+    normalizeBanTargetName,
     NotificationEvent,
 } from "@multi-indiegame/akashic-player-ban/protocol";
 import {
@@ -399,8 +400,12 @@ const gameScreenElement = (): HTMLElement => {
  *
  * api.confirm に (param) => Promise<boolean> を代入すれば差し替えられる。
  * null を代入すれば確認なしで即時実行になる。
+ *
+ * WHY: 名前はコンテンツが申告したときだけ、申告だと分かる見出しを付けて出す。
+ * 申告が無ければ playerId だけを出し、他の情報で補わない（本物の実行基盤が
+ * アカウント名で補うと、確認を繰り返すだけで名前を知れてしまう）。
  */
-const defaultConfirm = ({ playerId }: ConfirmParam): Promise<boolean> =>
+const defaultConfirm = ({ playerId, name }: ConfirmParam): Promise<boolean> =>
     new Promise((resolve) => {
         const overlay = create(
             "div",
@@ -445,6 +450,28 @@ const defaultConfirm = ({ playerId }: ConfirmParam): Promise<boolean> =>
             { textContent: "このプレイヤーを追放しますか？" },
         );
 
+        const nameBlock: HTMLElement[] = [];
+        if (name) {
+            const block = create("div", {
+                display: "flex",
+                flexFlow: "column nowrap",
+                gap: "2px",
+            });
+            block.append(
+                create(
+                    "p",
+                    { margin: "0", fontSize: "11px", color: "#888" },
+                    { textContent: "ゲームが申告した名前" },
+                ),
+                create(
+                    "p",
+                    { margin: "0", fontSize: "15px", wordBreak: "break-all" },
+                    { className: "player-ban-confirm-name", textContent: name },
+                ),
+            );
+            nameBlock.push(block);
+        }
+
         const idLine = create(
             "p",
             {
@@ -457,7 +484,10 @@ const defaultConfirm = ({ playerId }: ConfirmParam): Promise<boolean> =>
                 borderRadius: "2px",
                 wordBreak: "break-all",
             },
-            { textContent: playerId },
+            {
+                className: "player-ban-confirm-player-id",
+                textContent: playerId,
+            },
         );
 
         const note = create(
@@ -470,7 +500,10 @@ const defaultConfirm = ({ playerId }: ConfirmParam): Promise<boolean> =>
             },
             {
                 textContent:
-                    "akashic serve が実行基盤の確認 UI を代行しています。",
+                    "akashic serve が実行基盤の確認 UI を代行しています。" +
+                    (name
+                        ? "名前はゲームの申告で、実行基盤は確かめていません。"
+                        : ""),
             },
         );
 
@@ -502,7 +535,7 @@ const defaultConfirm = ({ playerId }: ConfirmParam): Promise<boolean> =>
         document.addEventListener("keydown", handleKeyDown, true);
 
         row.append(cancel, accept);
-        card.append(title, idLine, note, row);
+        card.append(title, ...nameBlock, idLine, note, row);
         overlay.append(card);
         gameScreenElement().append(overlay);
         accept.focus();
@@ -834,6 +867,8 @@ const tabEnabled = (): boolean => {
 interface ConfirmParam {
     action: string;
     playerId: string;
+    /** コンテンツが申告した表示名。申告が無ければ undefined */
+    name?: string;
 }
 
 interface BanResultLike {
@@ -844,6 +879,7 @@ interface BanResultLike {
 
 const request = async (
     playerId: string,
+    name: string | undefined,
     callback: (result: BanResultLike) => void,
 ): Promise<void> => {
     if (!canIssue()) {
@@ -852,7 +888,7 @@ const request = async (
     }
     try {
         const accepted = api.confirm
-            ? await api.confirm({ action: "banned", playerId })
+            ? await api.confirm({ action: "banned", playerId, name })
             : true;
         if (!accepted) {
             callback({ ok: false, playerId, reason: "UserCancel" });
@@ -888,10 +924,13 @@ const api = {
         ((param: ConfirmParam) => Promise<boolean>) | null,
     /**
      * コンテンツからの要求と同じ経路。発行権限を見て、確認 UI を挟む。
-     * devtools コンソールから直接叩く用。
+     * devtools コンソールから直接叩く用。name を渡すと、コンテンツが名前を
+     * 申告したときと同じ確認 UI になる。
      */
-    ban: (playerId: string): void => {
-        void request(playerId, (result) => console.log(result));
+    ban: (playerId: string, name?: string): void => {
+        void request(playerId, normalizeBanTargetName(name), (result) =>
+            console.log(result),
+        );
     },
     /**
      * ゲーム外からの追放。**コンテンツからは呼べない**（external に無い）。
@@ -990,9 +1029,11 @@ if (typeof window !== "undefined") {
 export default () => ({
     ban: ({
         playerId,
+        name,
         callback,
     }: {
         playerId: string;
+        name?: unknown;
         callback: (result: BanResultLike) => void;
-    }) => request(playerId, callback),
+    }) => request(playerId, normalizeBanTargetName(name), callback),
 });

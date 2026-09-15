@@ -117,6 +117,8 @@ module.exports = {
 
 ゲーム画面に重なる形で出ます。実行基盤が持つべき確認 UI の代役です。
 
+コンテンツが `banPlayer({ playerId, name })` で名前を添えると、「ゲームが申告した名前」として playerId の上に出ます。名前が無ければ playerId だけが出ます。
+
 - **「追放する」** — 全インスタンスで `onPlayerBanned` が発火します
 - **「やめる」**（または Esc） — callback に `{ ok: false, reason: "UserCancel" }` が返ります。他のインスタンスには何も通知されません
 
@@ -128,8 +130,9 @@ module.exports = {
 
 ```js
 // 自前の UI に差し替える
-window.playerBanServe.confirm = ({ action, playerId }) =>
-  Promise.resolve(window.confirm(`${action}: ${playerId}`));
+// name はコンテンツが申告した表示名。申告が無ければ undefined
+window.playerBanServe.confirm = ({ action, playerId, name }) =>
+  Promise.resolve(window.confirm(`${action}: ${name ?? ""} (${playerId})`));
 
 // 確認なしで即実行する
 window.playerBanServe.confirm = null;
@@ -161,6 +164,7 @@ window.playerBanServe.confirm = null;
 
 ```js
 window.playerBanServe.ban("pid2"); // コンテンツからの要求と同じ経路（許可の判定と確認 UI あり）
+window.playerBanServe.ban("pid2", "たろう"); // 名前を申告したときの確認 UI
 window.playerBanServe.externalBan("pid2"); // ゲーム外からの追放
 window.playerBanServe.unban("pid2"); // ゲーム外からの解除
 window.playerBanServe.allow(false); // このウィンドウからの banPlayer() を禁止（true で許可、null で既定、省略でいまの判定を返す）

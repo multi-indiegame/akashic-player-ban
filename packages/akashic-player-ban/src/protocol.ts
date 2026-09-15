@@ -78,6 +78,35 @@ export interface BanResult {
     reason?: BanResultReason;
 }
 
+/**
+ * 追放を要求する相手。
+ */
+export interface BanTarget {
+    /** 対象の in-game playerId（コンテンツが `ev.player.id` で観測している値） */
+    playerId: string;
+    /**
+     * コンテンツが申告する対象の表示名。任意。
+     *
+     * 実行基盤の確認 UI で、操作者が相手を見分ける補助にだけ使われる。実行基盤は
+     * 検証も playerId との突き合わせもしない。通知には載らない。
+     *
+     * WHY: 確認 UI に実行基盤が把握しているアカウント名を出すと、確認を出しては
+     * 取りやめることを繰り返すだけで、同意なく名前を知れてしまう。確認 UI には
+     * 要求したインスタンスがすでに知っている情報だけを出す。
+     */
+    name?: string;
+}
+
+/**
+ * `g.game.external.playerBan.ban` に渡す引数。
+ *
+ * WHY: name は後から足したフィールドで、受け取る側は必ず optional として読む。
+ * 名前が無いときはキーごと付けず、足す前と同じ形で呼ぶ。
+ */
+export interface BanRequest extends BanTarget {
+    callback: (result: BanResult) => void;
+}
+
 export interface PlayerBanNotification {
     playerId: string;
 }
@@ -108,10 +137,21 @@ export type NotificationEvent = MessageEvent;
  * reason:"Unauthorized" が返る。
  */
 export interface PlayerBanExternal {
-    ban: (param: {
-        playerId: string;
-        callback: (result: BanResult) => void;
-    }) => void;
+    ban: (param: BanRequest) => void;
+}
+
+/**
+ * 申告された表示名を、渡してよい値に揃える。空文字・空白だけ・文字列以外は
+ * 申告なし（undefined）として扱う。
+ *
+ * WHY: 表示名はコンテンツから来る信頼できない値。ここで揃えるのは形だけで、
+ * エスケープや長さ・制御文字の扱いは表示する実行基盤の責務（PROTOCOL.md 8 章）。
+ */
+export function normalizeBanTargetName(name: unknown): string | undefined {
+    if (typeof name !== "string" || name.trim() === "") {
+        return undefined;
+    }
+    return name;
 }
 
 export interface FunctionSignature {
