@@ -5,6 +5,8 @@
  * 仕様: https://github.com/multi-indiegame/akashic-external-protocol/blob/main/PROTOCOL.md
  */
 
+import type { MessageEvent } from "@akashic/playlog";
+
 /**
  * 通知イベントの発行者として使う予約 playerId。
  *
@@ -28,7 +30,11 @@ export const NOTIFICATION_TYPE = "@multi-indiegame/akashic-player-ban";
 /** この type の payload の版。受信側は完全一致のものだけ採用する */
 export const NOTIFICATION_VERSION = 1;
 
-/** playlog.EventCode.Message */
+/**
+ * playlog.EventCode.Message
+ *
+ * WHY: EventCode は const enum で、import type では値として参照できないので数値で持つ。
+ */
 const EVENT_CODE_MESSAGE = 32;
 
 export type PlayerBanAction = "banned" | "unbanned";
@@ -86,9 +92,9 @@ export interface PlayerBanNotificationPayload {
 /**
  * playlog の MessageEvent。
  *
- * WHY: `@akashic/playlog` に依存すると実行基盤の型を引き込むので、最小形で自前定義する。
+ * WHY: AMFlow の sendEvent などへそのまま渡せるよう playlog の型に合わせる。
  */
-export type NotificationEvent = [number, number, string, unknown];
+export type NotificationEvent = MessageEvent;
 
 /**
  * `g.game.external.playerBan` に生えるオブジェクト。
