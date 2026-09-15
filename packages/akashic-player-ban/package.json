@@ -41,6 +41,7 @@
   "license": "MIT",
   "devDependencies": {
     "@akashic/akashic-engine": "~3.21.3",
+    "@akashic/playlog": "^3.4.1",
     "rimraf": "^6.0.1",
     "typescript": "^5.7.2"
   },
