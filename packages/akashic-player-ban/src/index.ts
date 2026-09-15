@@ -1,15 +1,19 @@
 import {
+    BanRequest,
     BanResult,
+    BanTarget,
     EXTERNAL_KEY,
     PlayerBanExternal,
     PlayerBanNotification,
     PlayerBanNotificationPayload,
     decodeBanNotification,
+    normalizeBanTargetName,
 } from "./protocol";
 
 export {
     BanResult,
     BanResultReason,
+    BanTarget,
     PlayerBanAction,
     PlayerBanNotification,
     PlayerBanNotificationPayload,
@@ -201,11 +205,20 @@ export function isSupported(): boolean {
  *
  * callback はローカル。**進行から外すのは onPlayerBanned の中だけで行うこと。**
  * 押した時点で外すと、実行基盤に拒否されたときコンテンツだけが「いない」と思い込む。
+ *
+ * 対象は playerId の文字列か、表示名を添えた `{ playerId, name }` で渡す。name は
+ * 実行基盤の確認 UI で相手を見分ける補助に使われるだけで、検証されない。
+ * name を読まない実行基盤では、渡しても名前なしの確認になるだけで追放は変わらない。
  */
 export function banPlayer(
-    playerId: string,
+    target: string | BanTarget,
     callback?: (result: BanResult) => void,
 ): void {
+    const playerId = typeof target === "string" ? target : target.playerId;
+    const name =
+        typeof target === "string"
+            ? undefined
+            : normalizeBanTargetName(target.name);
     const done = (result: BanResult): void => {
         if (callback) {
             callback(result);
@@ -216,7 +229,7 @@ export function banPlayer(
         done({ ok: false, playerId: playerId, reason: "NotSupported" });
         return;
     }
-    external.ban({
+    const request: BanRequest = {
         playerId: playerId,
         callback: (result) => {
             done(
@@ -227,7 +240,11 @@ export function banPlayer(
                 },
             );
         },
-    });
+    };
+    if (name !== undefined) {
+        request.name = name;
+    }
+    external.ban(request);
 }
 
 /** 通知を積み上げた決定的な状態 */
